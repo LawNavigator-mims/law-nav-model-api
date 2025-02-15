@@ -7,3 +7,4 @@ torch
 numpy
 pydantic
 pandas
+scipy
