@@ -35,12 +35,12 @@ def search_documents(request: QueryRequest, top_k: int = 5):
     for idx in indices[0]:  
         row = df_metadata.iloc[idx]
         results.append({
-            "title": row["title"],
-            "chapter": row["chapter"],
-            "section": row["section"],
-            "content": row["content"],
-            "filename": row["filename"],
-            "page": row["page"]
+            "title": str(row["title"]),
+            "chapter": str(row["chapter"]),
+            "section": str(row["section"]),
+            "content": str(row["content"]),
+            "filename": str(row["filename"]),
+            "page": int(row["page"]) if isinstance(row["page"], (np.integer, np.int64)) else row["page"]
         })
 
     return {"query": request.text, "retrieved_docs": results}
