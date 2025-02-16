@@ -6,6 +6,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from pydantic import BaseModel
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 # File paths
 FAISS_INDEX_PATH = "vector_index.faiss"
@@ -29,6 +30,14 @@ embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
 # Initialize FastAPI app
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Define request model
 class QueryRequest(BaseModel):
