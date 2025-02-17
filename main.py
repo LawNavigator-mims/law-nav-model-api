@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from pydantic import BaseModel
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 # File paths
 FAISS_INDEX_PATH = "vector_index.faiss"
@@ -35,6 +36,14 @@ llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="aut
 
 # Initialize FastAPI app
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Define request model
 class QueryRequest(BaseModel):
