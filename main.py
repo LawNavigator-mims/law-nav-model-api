@@ -29,10 +29,15 @@ if not required_columns.issubset(df_metadata.columns):
 # Load embedding model
 embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
-# Load DeepSeek model for response generation
-llm_model_name = "deepseek-ai/deepseek-llm-7b"
-llm_tokenizer = AutoTokenizer.from_pretrained(llm_model_name)
-llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="auto")
+# Load Hugging Face Token from environment variables
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# Define the DeepSeek model
+llm_model_name = "deepseek-ai/deepseek-coder-6.7b-instruct"
+
+# Load Tokenizer and Model with authentication
+llm_tokenizer = AutoTokenizer.from_pretrained(llm_model_name, token=HF_TOKEN)
+llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="auto", token=HF_TOKEN)
 
 # Initialize FastAPI app
 app = FastAPI()
