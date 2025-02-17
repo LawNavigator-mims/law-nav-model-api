@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from pydantic import BaseModel
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
 
 # File paths
 FAISS_INDEX_PATH = "vector_index.faiss"
@@ -32,12 +33,19 @@ embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 # Load Hugging Face Token from environment variables
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-# Define the DeepSeek model
-llm_model_name = "deepseek-ai/deepseek-coder-6.7b-instruct"
+# # Define the DeepSeek model
+# llm_model_name = "deepseek-ai/deepseek-coder-6.7b-instruct"
 
-# Load Tokenizer and Model with authentication
-llm_tokenizer = AutoTokenizer.from_pretrained(llm_model_name, token=HF_TOKEN)
-llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="auto", token=HF_TOKEN)
+# # Load Tokenizer and Model with authentication
+# llm_tokenizer = AutoTokenizer.from_pretrained(llm_model_name, token=HF_TOKEN)
+# llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="auto", token=HF_TOKEN)
+
+# OpenAI API Client for Llama API
+LLAMA_API_KEY = os.getenv("LLAMA_API_KEY")  # Stored the API key in render.com environment variables
+client = OpenAI(
+    api_key=LLAMA_API_KEY,
+    base_url="https://api.llama-api.com"
+)
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -73,7 +81,7 @@ def generate_response(request: QueryRequest, top_k: int = 5):
 
     context = "\n".join(context_chunks) if context_chunks else "No relevant legal information found."
 
-    # Generate response using DeepSeek LLM
+    # Generate response using LLM
     prompt = f"""You are an expert in legal regulations. Answer the user's question based on the given context.
 If the context does not provide a complete answer, say "Not enough information in the provided context."
 Use structured bullet points if multiple regulations apply.
@@ -87,9 +95,21 @@ Use structured bullet points if multiple regulations apply.
 ### Response:
 """
 
-    inputs = llm_tokenizer(prompt, return_tensors="pt").to("cuda")
-    output = llm_model.generate(**inputs, max_length=512)
-    response_text = llm_tokenizer.decode(output[0], skip_special_tokens=True)
+    # inputs = llm_tokenizer(prompt, return_tensors="pt").to("cuda")
+    # output = llm_model.generate(**inputs, max_length=512)
+    # response_text = llm_tokenizer.decode(output[0], skip_special_tokens=True)
+
+    # Call Llama API for response
+    response = client.chat.completions.create(
+        model="llama3.1-70b",
+        messages=[
+            {"role": "system", "content": "Assistant is a large language model trained to provide legal insights."},
+            {"role": "user", "content": prompt}
+        ],
+    )
+
+    # Extract response text
+    response_text = response.choices[0].message.content
 
     return {"query": request.text, "response": response_text}
 
