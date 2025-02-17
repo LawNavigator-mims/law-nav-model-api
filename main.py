@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from pydantic import BaseModel
 import uvicorn
 
@@ -11,7 +12,7 @@ import uvicorn
 FAISS_INDEX_PATH = "vector_index.faiss"
 DOCUMENT_METADATA_PATH = "document_metadata.csv"
 
-# Check if FAISS index exists
+# Ensure FAISS index exists
 if not os.path.exists(FAISS_INDEX_PATH):
     raise FileNotFoundError(f"FAISS index file not found at {FAISS_INDEX_PATH}")
 
@@ -27,6 +28,11 @@ if not required_columns.issubset(df_metadata.columns):
 # Load embedding model
 embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
+# Load DeepSeek model for response generation
+llm_model_name = "deepseek-ai/deepseek-llm-7b"
+llm_tokenizer = AutoTokenizer.from_pretrained(llm_model_name)
+llm_model = AutoModelForCausalLM.from_pretrained(llm_model_name, device_map="auto")
+
 # Initialize FastAPI app
 app = FastAPI()
 
@@ -36,30 +42,42 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def home():
-    return {"message": "Welcome to the Law Navigator API. Use /search/ or /generate-response/ endpoints."}
+    return {"message": "Welcome to the Law Navigator API. Use /search/ to generate legal responses."}
 
 @app.post("/search/")
-def search_documents(request: QueryRequest, top_k: int = 5):
-    """Retrieves the most relevant documents based on the input query."""
+def generate_response(request: QueryRequest, top_k: int = 5):
+    """Retrieves the most relevant documents and generates a response."""
     query_embedding = embedding_model.encode([request.text], convert_to_numpy=True)
     distances, indices = index.search(query_embedding, top_k)
 
-    results = []
+    # Extract relevant chunks
+    context_chunks = []
     for idx in indices[0]:
-        if idx < 0 or idx >= len(df_metadata):  # Ensure index is within bounds
-            continue
+        if 0 <= idx < len(df_metadata):  # Ensure index is valid
+            row = df_metadata.iloc[idx]
+            context_chunks.append(str(row.get("content", "")))
 
-        row = df_metadata.iloc[idx]
-        results.append({
-            "title": str(row.get("title", "")),
-            "chapter": str(row.get("chapter", "")),
-            "section": str(row.get("section", "")),
-            "content": str(row.get("content", "")),
-            "filename": str(row.get("filename", "")),
-            "page": int(row["page"]) if pd.notna(row["page"]) and isinstance(row["page"], (np.integer, np.int64)) else None
-        })
+    context = "\n".join(context_chunks) if context_chunks else "No relevant legal information found."
 
-    return {"query": request.text, "retrieved_docs": results}
+    # Generate response using DeepSeek LLM
+    prompt = f"""You are an expert in legal regulations. Answer the user's question based on the given context.
+If the context does not provide a complete answer, say "Not enough information in the provided context."
+Use structured bullet points if multiple regulations apply.
+
+### Context:
+{context}
+
+### Question:
+{request.text}
+
+### Response:
+"""
+
+    inputs = llm_tokenizer(prompt, return_tensors="pt").to("cuda")
+    output = llm_model.generate(**inputs, max_length=512)
+    response_text = llm_tokenizer.decode(output[0], skip_special_tokens=True)
+
+    return {"query": request.text, "response": response_text}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=10000)
