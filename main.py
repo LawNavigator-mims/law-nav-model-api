@@ -29,7 +29,7 @@ if not required_columns.issubset(df_metadata.columns):
     raise ValueError(f"Missing columns in metadata file. Expected: {required_columns}")
 
 # Load embedding model
-embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
 # Load Hugging Face Token from environment variables
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -72,6 +72,10 @@ def extract_clean_answer(response_text):
 
 def search_documents(query, top_k=10):
     query_embedding = embedding_model.encode([query], convert_to_numpy=True)
+
+    if query_embedding.shape[1] != index.d:
+        raise ValueError(f"Embedding dimension {query_embedding.shape[1]} does not match FAISS index dimension {index.d}")
+    
     distances, indices = index.search(query_embedding, top_k)
 
     results = []
