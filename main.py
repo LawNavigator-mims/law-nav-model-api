@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import faiss
 import os
+import re
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -28,7 +29,7 @@ if not required_columns.issubset(df_metadata.columns):
     raise ValueError(f"Missing columns in metadata file. Expected: {required_columns}")
 
 # Load embedding model
-embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Load Hugging Face Token from environment variables
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -62,55 +63,68 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     text: str
 
-@app.get("/")
-def home():
-    return {"message": "Welcome to the Law Navigator API. Use /search/ to generate legal responses."}
+def extract_clean_answer(response_text):
+    parts = response_text.split("Answer:", 1)
+    if len(parts) < 2:
+        return response_text
+    answer = parts[1].strip()
+    return re.sub(r"(Question:.*|Context:.*)", "", answer, flags=re.DOTALL).strip()
 
-@app.post("/search/")
-def generate_response(request: QueryRequest, top_k: int = 5):
-    """Retrieves the most relevant documents and generates a response."""
-    query_embedding = embedding_model.encode([request.text], convert_to_numpy=True)
+def search_documents(query, top_k=10):
+    query_embedding = embedding_model.encode([query], convert_to_numpy=True)
     distances, indices = index.search(query_embedding, top_k)
 
-    # Extract relevant chunks
-    context_chunks = []
+    results = []
     for idx in indices[0]:
-        if 0 <= idx < len(df_metadata):  # Ensure index is valid
+        if 0 <= idx < len(df_metadata):  # Ensure index is within bounds
             row = df_metadata.iloc[idx]
-            context_chunks.append(str(row.get("content", "")))
+            results.append({
+                "title": row["title"],
+                "chapter": row["chapter"],
+                "section": row["section"],
+                "content": row["content"],
+                "filename": row["filename"],
+                "page": row["page"]
+            })
 
-    context = "\n".join(context_chunks) if context_chunks else "No relevant legal information found."
+    return pd.DataFrame(results)
 
-    # Generate response using LLM
-    prompt = f"""You are an expert in legal regulations. Answer the user's question based on the given context.
-If the context does not provide a complete answer, say "Not enough information in the provided context."
-Use structured bullet points if multiple regulations apply.
+def generate_response(query):
+    retrieved_docs = search_documents(query)
+    context = "\n".join(retrieved_docs["content"].tolist())[:1500]
 
-### Context:
+    prompt = f"""
+You are an expert in legal regulations. Your task is to summarize the key property tax regulations
+from the provided legal documents and present them in a clear and structured format.
+
+## **Summary of Key Regulations on Property Tax**
+- First, provide a **brief summary** (2-3 sentences) of the key points.
+- Then, list the main regulations as **bullet points**, clearly stating the jurisdiction, chapter, and section.
+- Finally, include the **source citations** in brackets `[Source: <Jurisdiction>, Title <X>, Chapter <Y>]`.
+
+Context:
 {context}
 
-### Question:
-{request.text}
-
-### Response:
+Question: {query}
+Answer:
 """
-
-    # inputs = llm_tokenizer(prompt, return_tensors="pt").to("cuda")
-    # output = llm_model.generate(**inputs, max_length=512)
-    # response_text = llm_tokenizer.decode(output[0], skip_special_tokens=True)
-
-    # Call Llama API for response
     response = client.chat.completions.create(
         model="llama3.1-70b",
         messages=[
             {"role": "system", "content": "Assistant is a large language model trained to provide legal insights."},
             {"role": "user", "content": prompt}
-        ],
+        ]
     )
 
-    # Extract response text
-    response_text = response.choices[0].message.content
+    return extract_clean_answer(response.choices[0].message.content)
 
+@app.get("/")
+def home():
+    return {"message": "Welcome to the Law Navigator API. Use /search/ to generate legal responses."}
+
+@app.post("/search/")
+def search_endpoint(request: QueryRequest, top_k: int = 5):
+    response_text = generate_response(request.text)
     return {"query": request.text, "response": response_text}
 
 if __name__ == "__main__":
