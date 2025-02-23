@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
 # File paths
-FAISS_INDEX_PATH = "vector_index.faiss_2"
+FAISS_INDEX_PATH = "vector_index_2.faiss"
 DOCUMENT_METADATA_PATH = "document_metadata_2.csv"
 
 # Ensure FAISS index exists
