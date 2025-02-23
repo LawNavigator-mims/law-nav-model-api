@@ -12,8 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
 # File paths
-FAISS_INDEX_PATH = "vector_index.faiss"
-DOCUMENT_METADATA_PATH = "document_metadata.csv"
+FAISS_INDEX_PATH = "vector_index.faiss_2"
+DOCUMENT_METADATA_PATH = "document_metadata_2.csv"
 
 # Ensure FAISS index exists
 if not os.path.exists(FAISS_INDEX_PATH):
@@ -29,7 +29,7 @@ if not required_columns.issubset(df_metadata.columns):
     raise ValueError(f"Missing columns in metadata file. Expected: {required_columns}")
 
 # Load embedding model
-embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Load Hugging Face Token from environment variables
 HF_TOKEN = os.getenv("HF_TOKEN")
