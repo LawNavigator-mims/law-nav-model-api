@@ -12,8 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 
 # File paths
-FAISS_INDEX_PATH = "vector_index_2.faiss"
-DOCUMENT_METADATA_PATH = "document_metadata_2.csv"
+FAISS_INDEX_PATH = "vector_chunks_MiniLM.faiss"
+DOCUMENT_METADATA_PATH = "vector_chunks_MiniLM_metadata.csv"
 
 # Ensure FAISS index exists
 if not os.path.exists(FAISS_INDEX_PATH):
