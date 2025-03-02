@@ -10,3 +10,6 @@ pandas
 scipy
 accelerate>=0.26.0
 openai
+python-dotenv==1.0.0  # For .env file
+google-cloud-secret-manager==2.16.0
+google-cloud-storage
