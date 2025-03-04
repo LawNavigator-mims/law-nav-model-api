@@ -10,6 +10,17 @@ from pydantic import BaseModel
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
+from dotenv import load_dotenv 
+from supabase import create_client, Client
+
+
+
+load_dotenv()
+
+
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_ANON_KEY")
+supabase: Client = create_client(url, key)
 
 # File paths
 FAISS_INDEX_PATH = "vector_chunks_MiniLM.faiss"
@@ -63,6 +74,27 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     text: str
 
+
+def convert_np_values_to_native(d):
+    """
+    Convert NumPy dtypes in a dict to native Python types
+    so they are JSON-serializable (e.g., int, float, list).
+    """
+    new_dict = {}
+    for k, v in d.items():
+        # If it's a NumPy integer (e.g., np.int64), convert to Python int
+        if isinstance(v, np.integer):
+            new_dict[k] = int(v)
+        # If it's a NumPy float (e.g., np.float64), convert to Python float
+        elif isinstance(v, np.floating):
+            new_dict[k] = float(v)
+        # If it's a NumPy array, convert to list
+        elif isinstance(v, np.ndarray):
+            new_dict[k] = v.tolist()
+        else:
+            new_dict[k] = v
+    return new_dict
+
 def extract_clean_answer(response_text):
     parts = response_text.split("Answer:", 1)
     if len(parts) < 2:
@@ -73,16 +105,23 @@ def extract_clean_answer(response_text):
 def search_documents(query, top_k=10):
     query_embedding = embedding_model.encode([query], convert_to_numpy=True)
 
-    if query_embedding.shape[1] != index.d:
-        raise ValueError(f"Embedding dimension {query_embedding.shape[1]} does not match FAISS index dimension {index.d}")
+    # if query_embedding.shape[1] != index.d:
+    #     raise ValueError(f"Embedding dimension {query_embedding.shape[1]} does not match FAISS index dimension {index.d}")
     
-    distances, indices = index.search(query_embedding, top_k)
+    # distances, indices = index.search(query_embedding, top_k)
+
+    
+    args =  {
+        'query_embedding': query_embedding[0],
+        'match_threshold': 0.5,
+        'match_count': 100
+    }
+    args = convert_np_values_to_native(args)
+    response = supabase.rpc('match_documents', args).execute()
 
     results = []
-    for idx in indices[0]:
-        if 0 <= idx < len(df_metadata):  # Ensure index is within bounds
-            row = df_metadata.iloc[idx]
-            results.append({
+    for row in response.data:
+        results.append({
                 "title": row["title"],
                 "chapter": row["chapter"],
                 "section": row["section"],
