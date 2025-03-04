@@ -18,8 +18,8 @@ from supabase import create_client, Client
 load_dotenv()
 
 
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_ANON_KEY")
+url: str = os.getenv("SUPABASE_URL")
+key: str = os.getenv("SUPABASE_ANON_KEY")
 supabase: Client = create_client(url, key)
 
 # File paths
